@@ -419,27 +419,15 @@ for i in range(len(df2)):
 df2['temp_next_time'] = pd.to_datetime(df2['temp_next_time'], format='%Y-%m-%d %H:%M') #directly from the DMV website
 df2['diffOfTime_vertical'] = df2['temp_next_time'] - df2['time_shift'] # horizontal distance between times
 
-#df2['days_cat'] = df.apply(lambda x: x.time_shift.day, axis=1)
-#df2['hours_cat'] = df.apply(lambda x: x.time_shift.hour, axis=1)
-#df2['minutes_cat'] = df.apply(lambda x: x.time_shift.minute, axis=1)
 
-df2.to_csv('df2.csv')
-len(df2)
-
+#df2.to_csv('df2.csv')
 df2_cleaned = df2.copy()
 df2_cleaned.drop(['value', 'hasAvailability', 'diffOfTime', 'diffTimeDays', 'countdown_n', 'days_cat', 'hours_cat', 'minutes_cat'], axis = 1, inplace=True)
+'''
 df2_cleaned['days_cat'] = df2_cleaned.apply(lambda x: x.time_shift.day, axis=1)
 df2_cleaned['hours_cat'] = df2_cleaned.apply(lambda x: x.time_shift.hour, axis=1)
 df2_cleaned['minutes_cat'] = df2_cleaned.apply(lambda x: x.time_shift.minute, axis=1)
-
-#df2_cleaned.drop(['days_cat', 'hours_cat', 'minutes_cat'], axis = 1, inplace=True)
-
-#df2_cleaned_temp = df2_cleaned[57000:57005]
-#df2_cleaned_temp = df2_cleaned[57000:200000]
-#df2_cleaned_temp[57001:79990]
-#df2_cleaned_temp.reset_index(inplace = True)
-#df2_cleaned_temp.time_shift[57001].day
-
+'''
 
 
 
@@ -458,17 +446,6 @@ for location in columnsdf2:
     plt.show()
 
 
-'''
-df_grpcity = df2[['time_shift', 'hasAvailability']].groupby('time_shift').sum('hasAvailability')
-
-df_grpcity['hasAvailability'] = df_grpcity['hasAvailability'].apply(lambda x: x if x == 0 else 1)
-df_grpcity['countdown_n'] = df_grpcity.groupby((df_grpcity['hasAvailability'] == 1).cumsum()).cumcount(ascending=False)+1
-df_grpcity.loc[df_grpcity['hasAvailability'] == 1, 'countdown_n'] = 0
-
-dist = df_grpcity.groupby('countdown_n').count()
-dist[:50]
-'''
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                      #
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -486,7 +463,7 @@ from sklearn.linear_model import LinearRegression, SGDRegressor
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-
+'''
 
 # df2.columns = time_stamp', 'variable', 'value', 'hasAvailability', 'diffOfTime', 'diffTimeDays', 'countdown'
 columnsdf2 = df2.variable.unique()
@@ -530,7 +507,7 @@ test = a[0].value
 records_series[10] - records_series[0]
 records_series_relative = records_series.apply(lambda x: x - records_series.iloc[0])
 
-'''
+
 # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
 # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
 # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
@@ -609,7 +586,7 @@ model = cat_estimator('variable', pipe_cat).fit(df2_cleaned, df2_cleaned['diffOf
 
 
 
-
+'''
 df2_t = df2[:5]
 df2_t['daysdf2'] = df2_t.apply(lambda x: x.time_shift.day, axis=1)
 df2_t['hoursdf2'] = df2_t.apply(lambda x: x.time_shift.hour, axis=1)
@@ -622,13 +599,13 @@ features = ColumnTransformer([
             ('minutes', OneHotEncoder(), ['minutesdf2'])
             ])
 features.fit_transform(df2_t)
+'''
 
 
 
 
 
-
-
+'''
 data_solo_location = df2.groupby('variable').get_group('Bayonne') #splits dataset per city
 data_solo_location['time_shift'] = data_solo_location['time_shift'] - data_solo_location['time_shift'][0]
 
@@ -661,3 +638,4 @@ test = a[0].value
 
 records_series[10] - records_series[0]
 records_series_relative = records_series.apply(lambda x: x - records_series.iloc[0])
+'''
