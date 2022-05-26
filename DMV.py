@@ -519,11 +519,7 @@ records_series_relative = records_series.apply(lambda x: x - records_series.iloc
 '''
 import pickle
 from sklearn import base
-
-
-
 class cat_estimator(base.BaseEstimator, base.RegressorMixin):
-    
     def __init__(self, column, estimator_factory):
         # column is the value to group by; estimator_factory can be
         # called to produce estimators
@@ -533,60 +529,66 @@ class cat_estimator(base.BaseEstimator, base.RegressorMixin):
     def fit(self, X, y):
         # Create an estimator and fit it with the portion in each group
         # uses group_by + get_group to split df in cities. Train a each model and store them in a dictionary
-        self.cities = []
-        for city in X[self.column].unique(): #gets all cities names in a list
-            self.cities.append(city)
-        self.dict_models = {} # where all models will be stores, key = location
-        for i in range(len(self.cities)): #defines city and list_models
-            city = self.cities[i] #defines the city name based on position i
-            print(city)
-            self.dict_models[city] = self.estimator_factory() #adds entry to dictionary
-            #splits dataset per city. As the index will be used later, it must be reset
-            data_solo_city = X.groupby(self.column).get_group(city).reset_index() 
-            #y0 = np.array(train[['diffOfTime_vertical']]/ np.timedelta64(1, 's'))
-            y = np.array(y/ np.timedelta64(1, 's'))
-            self.dict_models[city].fit(data_solo_city, y)
-            print('model trained for ' + city)
+        
+        self.ests = {}
+        groups = X.groupby(self.column).groups
+        for group, rows in groups.items():
+            self.ests[group] = self.estimator_factory()
+            self.ests[group].fit(X.loc[rows], y.loc[rows])
+            model_name = str(group + '_model')
+            pickle.dump(self.ests[group], open(model_name, 'wb'))
         return self
 
     def predict(self, X):
-        answers = []
-        X_t = X
-        X_datetime_only = X_t.apply(lambda x: (x - X_t.iloc[0]) / pd.offsets.Hour(1))
-        for i in range(0,len(X_datetime_only)):
-            try:
-                self.prediction_model = self.dict_models[X['city'][i]] # gets model for the city for given line
-                prediction_values_df = X_datetime_only.iloc[i] # uses only that row to calculate answer
-                [prediction] = self.prediction_model.predict(prediction_values_df)
-            except KeyError:
-                prediction = 0
-            answers.append(prediction)
-        return answers
+        #y = np.array(y/ np.timedelta64(1, 's')) 
+        groups = X.groupby(self.column).groups
+        output = pd.Series(dtype=np.float32)
+        for group, rows in groups.items():
+            pred = pd.Series(self.ests[group].predict(X.loc[rows]), index = rows)
+            output = output.append(pred)
+        return output.loc[X.index]
 
 
-class time_to_categorical(base.BaseEstimator, base.TransformerMixin):
-#    def __init__(self):
-    def fit(self, X, y=None):
-        self.features = ColumnTransformer([
-            ('days', OneHotEncoder(), X['days_cat']),
-            ('hours', OneHotEncoder(), X['hours_cat']),
-            ('minutes', OneHotEncoder(), X['minutes_cat'])
+def season_factory():
+    features = ColumnTransformer([
+            ('days', OneHotEncoder(), ['days_cat']),
+            ('hours', OneHotEncoder(), ['hours_cat']),
+            ('minutes', OneHotEncoder(), ['minutes_cat'])
             ])
-        return self
-    
-    def transform(self, X):
-        self.features.fit_transform(X)
-        return self.features
+    return Pipeline([('time_to_cat', features),
+                 ('rf', RandomForestRegressor(max_depth=15, min_samples_leaf=15, n_estimators=350))])
 
-def pipe_cat():
-    return Pipeline([('time_to_cat', time_to_categorical()),
-                 ('rf', RandomForestRegressor(max_depth=15, min_samples_leaf=15, n_estimators=450))])                     
+#model = cat_estimator('variable', pipe_cat).fit(df2_cleaned, df2_cleaned['diffOfTime_vertical'])
+df2_t = df2[:50000]
+model = cat_estimator('variable', season_factory).fit(df2_t, df2_t['diffOfTime_vertical'])
+results = model.predict(df2_t[:5])
+results / 3.6e+12 #divide the time value by 3.6e+12 from ns to hours
 
-model = cat_estimator('variable', pipe_cat).fit(df2_cleaned, df2_cleaned['diffOfTime_vertical'])
-
+plt.plot(df2_t.time_shift, df2_t.diffOfTime_vertical)
+plt.plot(df2_t.time_shift, model.predict(df2_t))
+plt.plot(df2_t.time_shift, df2_t.diffOfTime_vertical, df2_t.time_shift, model.predict(df2_t)) # rf no hyperparameters
 
 
 '''
+df2_t = df2[:500000]
+df2_t
+groups1 = df2_t.groupby(df2_t.variable).groups
+for group, rows in groups1.items():
+#    print(rows)
+    print (group)
+    self.ests[group] = self.estimator_factory()
+    self.ests[group].fit(X.loc[rows], y.loc[rows])
+return self
+
+'''
+
+
+m = time_to_categorical()
+m.fit(df2_cleaned[['days_cat', 'hours_cat', 'minutes_cat']])
+m.transform(df2_cleaned[['days_cat', 'hours_cat', 'minutes_cat']])
+
+
+
 df2_t = df2[:5]
 df2_t['daysdf2'] = df2_t.apply(lambda x: x.time_shift.day, axis=1)
 df2_t['hoursdf2'] = df2_t.apply(lambda x: x.time_shift.hour, axis=1)
@@ -599,9 +601,13 @@ features = ColumnTransformer([
             ('minutes', OneHotEncoder(), ['minutesdf2'])
             ])
 features.fit_transform(df2_t)
-'''
 
 
+df2_t_ppt = df2_t.copy()
+df2_t_ppt.drop(['hasAvailability', 'diffOfTime', 'diffTimeDays', 'temp_next_time', 'diffOfTime_vertical_relative'], axis=1, inplace=True)
+t_col = df2_t_ppt.columns
+t_col
+df2_t_ppt.columns = (['time stamp', 'location', 'next app.', 'countdown', 'time to next app', 'days_cat', 'hours_cat', 'minutes_cat'])
 
 
 
