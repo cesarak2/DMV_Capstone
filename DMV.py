@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from cgi import print_environ_usage
+import os
 from os.path import exists # check if SQL exists
 #import re
 #import smtplib, ssl
@@ -143,7 +144,7 @@ query = """
 c = connection.cursor()
 raw_service = pd.read_sql(query, connection)
 raw_service.shape #(57003, 41)
-service = 'initial_permit'
+service = 'INITIAL_PERMIT'
 
 # # # # # # # # # # # # # # # # # # # # # # # #
 #            FIXING THE MISSING AM PM         #
@@ -315,7 +316,7 @@ class cat_estimator(base.BaseEstimator, base.RegressorMixin):
             self.ests[group] = self.estimator_factory() #calls factory per model
             self.ests[group].fit(X.loc[rows], y.loc[rows]) #fits per location
             model_name = str(service + '_' + group + '_model') #defines name for saving
-            pickle.dump(self.ests[group], open(model_name, 'wb')) #saves model
+            pickle.dump(self.ests[group], open((os.path.join('models', model_name)), 'wb')) #saves model
         return self
 
     def predict(self, X):

@@ -1,4 +1,4 @@
-locations = ['time_stamp', 'Bakers_Basin', 'Bayonne',
+locations = ['Bakers_Basin', 'Bayonne',
    'Camden', 'Cherry_Hill', 'Cardiff', 'Delanco', 'East_Orange',
    'Eatontown', 'Edison', 'Elizabeth', 'Flemington', 'Freehold',
    'Hazlet', 'Jersey_City', 'Lakewood', 'Lodi', 'Manahawkin',
