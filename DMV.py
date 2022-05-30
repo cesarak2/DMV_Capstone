@@ -2,147 +2,113 @@ import numpy as np
 import pandas as pd
 from cgi import print_environ_usage
 from os.path import exists # check if SQL exists
-import re
-import smtplib, ssl
-from subprocess import CalledProcessError
-import time
-from datetime import datetime
-import random #for random refresh times
+#import re
+#import smtplib, ssl
+#from subprocess import CalledProcessError
+#import time
+#from datetime import datetime
+#import random #for random refresh times
 from pprint import pprint
 import sqlite3
 import sqlite3 as db
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
-
 from sqlalchemy import outerjoin
+# model training
+from sklearn.linear_model import Ridge
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.datasets import make_regression
+from sklearn import base
+from sklearn.linear_model import LinearRegression, SGDRegressor
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import pickle
+from sklearn import base
+# hyperparameters
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+# model evaluation
+from sklearn.metrics import mean_squared_error
+import math
 
-# TESTING QUERIES
-# to execute
-#con = sqlite3.connect('DB_DMV.sqlite')
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # #
+#       MAKING AND TESTING THE SQL CONNECTION       #
+# # # # # # # # # # # # # # # # # # # # # # # # # # #
 connection = sqlite3.connect('DB_DMV.sqlite')
-#db = mysql.connector.connect(option_files='DB_DMV.sqlite', use_pure=True, use_unicode=True, charset='ascii')
-
-
-# 3 WAYS TO EXECUTE:
-    # 1st:
+# testing a simple query:
 query = """
-    SELECT * FROM INITIAL_PERMIT;
-    """
-query = """
-    SELECT * FROM REAL_ID
+    SELECT * FROM REAL_ID LIMIT 10;
     """
 c = connection.cursor()
 r = c.execute(query)
-a = r.fetchall()
-
-df = pd.read_sql(query, connection)
-# con.commit()
-# cursor = con.cursor()
-a = connection.execute("SELECT * FROM INITIAL_PERMIT limit 5")
-a = connection.execute(query)
-a = connection.execute("SELECT * FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%';")
-
-record=a.fetchone()
-if record==None:
-    pass
-print (record)
-
-    #2nd
-# to print
-query="SELECT COUNT(*) from INITIAL_PERMIT;"
-query="PRAGMA table_info(INITIAL_PERMIT);"
-query = """
-SELECT SUM(CASE when Bayonne is NULL then 1 else 0 end) count_nulls 
-, count(Bakers_Basin) count_not_nulls from INITIAL_PERMIT
-"""
-
-cur=connection.cursor()
-cur.execute(query)
-cur.fetchall()
-print("description: ", end="")
-pprint(cur.description)
-
-while True:
-   record=cur.fetchone()
-   if record==None:
-       break
-   print (record)
-
-type(record)
-print(record)
-record
-
-
-
-# # # TO MODIFY TABLE
-
-query="""
-UPDATE
-    INITIAL_PERMIT
-SET
-    Bakers_Basin = null WHERE Bakers_Basin = 'NULL'
-"""
-
-cur=db.cursor()
-cur.execute(query)
-record=cur.fetchone()
-print (record)
-
-
-
-# GETS ALL TABLES
-
-query = """
-SELECT
-    *
-FROM
-    sqlite_schema
-WHERE
-    type='table' AND
-    name NOT LIKE 'sqlite_%';
-"""
-
-cur=db.cursor()
-cur.execute(query)
-while True:
-   record=cur.fetchone()
-   if record==None:
-       break
-   print (record)
-
+a = r.fetchall() # returns [(48031, 17586)]
 #https://www.knowledgehut.com/tutorials/python-tutorial/python-database-connectivity
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # ##
 # GETS ALL SERVICES BY EXTRATING TABLES FROM SQL #
 # # # # # # # # # # # # # # # # # # # # # # # # ##
-
 query = "SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name;"
-cur=connection.cursor()
-cur.execute(query) #executes query
+c.execute(query) #executes query
 list_of_services = [] #defines empty list to be populated
 while True: # loops through all tables and retrieve their names
-   record=cur.fetchone()
+   record=c.fetchone()
    if record==None: # breaks when there is no more data to fetch
        break
-   list_of_services.append(record[0]) #comes in a tuple with two elements
-   #print (record)
-list_of_services
+   list_of_services.append(record[0])
+
+if 'dmv_zips' in list_of_services: # removes later additions to the database
+    list_of_services.remove('dmv_zips')
+    print('contains')
+print('List of services: '+ str(list_of_services))
+'''
+# returns List of services: ['CDL_PERMIT_OR_ENDORSEMENT', 'INITIAL_PERMIT',
+#   'KNOWLEDGE_TESTING', 'NEW_TITLE_OR_REGISTRATION', 'NONDRIVER_ID',
+#   'REAL_ID', 'REGISTRATION_RENEWAL', 'RENEWAL_CDL',
+#   'RENEWAL_LICENSE_OR_NONDRIVER_ID', 'TITLE_DUPLICATE_or_REPLACEMENT',
+#   TRANSFER_FROM_OUT_OF_STATE']
+'''
+
 
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
 # GETS ALL CITIES BY EXTRATING COLUMNS SQL COLUMNS #
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
-
-query = "PRAGMA table_info(REAL_ID);"
-cur=connection.cursor()
-cur.execute(query) #executes query
+query = "PRAGMA table_info(" + list_of_services[0] + ");" #uses 1st service as baseline
+c.execute(query)
 list_of_locations = [] #defines empty list to be populated
-while True: # loops through all tables and retrieve their column names
-   record=cur.fetchone()
+while True: # loops through all tables and retrieve their column names, i.e., locations
+   record=c.fetchone()
    if record==None: # breaks when there is no more data to fetch
        break
-   list_of_locations.append(record[1]) #comes in a tuple with four elements
-   #print (record)
-list_of_locations
+   list_of_locations.append(record[1])
+print('List of locations: ' + str(list_of_locations))
+'''
+# returns List of locations: ['time_stamp', 'Bakers_Basin', 'Bayonne',
+#   'Camden', 'Cherry_Hill', 'Cardiff', 'Delanco', 'East_Orange',
+#   'Eatontown', 'Edison', 'Elizabeth', 'Flemington', 'Freehold',
+#   'Hazlet', 'Jersey_City', 'Lakewood', 'Lodi', 'Manahawkin',
+#   'Medford', 'Newark', 'Newton', 'North_Bergen', 'Oakland',
+#   'Paterson', 'Rahway', 'Randolph', 'Rio_Grande', 'Runnemede',
+#   'Salem', 'Somerville', 'South_Brunswick', 'South_Plainfiled',
+#   'Springfield', 'Toms_River', 'Trenton_Regional', 'Turnersville',
+#   'Vineland', 'Wallington', 'Washington', 'Wayne', 'West_Deptford']
+'''
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # #
+#            COMPARES NULLS AGAINST VALUES          #
+# # # # # # # # # # # # # # # # # # # # # # # # # # #
+# Checks is the NULLS are text or types:
+query = """
+SELECT SUM(CASE when Bayonne is NULL then 1 else 0 end) count_nulls 
+, count(Bakers_Basin) count_not_nulls from INITIAL_PERMIT
+"""
+c.execute(query)
+c.fetchall() #if count_nulls is 0, NULLS are stores as text.
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
@@ -164,57 +130,6 @@ for service in list_of_services:
         c.execute(query)
 connection.commit()
 
-# # # # # # # # # # # # # # # # # # # # # # # # # # #
-#            COMPARES NULLS AGAINST VALUES          #
-# # # # # # # # # # # # # # # # # # # # # # # # # # #
-# COUNTS NULLS
-query = """
-SELECT SUM(CASE when Bakers_Basin is NULL then 1 else 0 end) count_nulls 
-, count(Bayonne) count_not_nulls from INITIAL_PERMIT;
-"""
-# should be 39417, 57003
-a = connection.execute(query)
-record=a.fetchone()
-if record==None:
-    pass
-print (record)
-
-
-
-# # # # # # #
-# USING ROW_FACTORY TOIMPORT USING LISTS
-# # # # # # #
-
-connection.row_factory = lambda cursor, row: row[0]
-c = connection.cursor()
-timestamps = c.execute('SELECT time_stamp FROM REAL_ID WHERE Bakers_Basin IS NOT NULL;').fetchall()
-
-
-connection.row_factory = lambda cursor, row: row[0]
-c = connection.cursor()
-records = c.execute('SELECT Bakers_Basin FROM REAL_ID WHERE Bakers_Basin IS NOT NULL;').fetchall()
-
-connection.row_factory = lambda cursor, row: row[0,1]
-c = connection.cursor()
-df = c.execute('SELECT time_stamp FROM REAL_ID WHERE Bakers_Basin IS NOT NULL;').fetchall()
-df
-
-# # # # # # 
-# CONVERTING TO SERIES AND THEN TO DATETIME
-# # # # # #
-records_series = pd.Series(records)
-records_series = pd.to_datetime(records_series)
-timestamps_series = pd.Series(timestamps)
-timestamps_series = pd.to_datetime(timestamps_series)
-
-delta = records_series - timestamps_series
-records_series.head(3)
-timestamps_series.head(3)
-delta.head(3)
-
-
-# https://stackoverflow.com/questions/2854011/get-a-list-of-field-values-from-pythons-sqlite3-not-tuples-representing-rows
-
 
 
 
@@ -222,303 +137,167 @@ delta.head(3)
 # # # # # # # # # # # # # # # # # # 
 #         CONVERTING TO DF        #
 # # # # # # # # # # # # # # # # # # 
-con = sqlite3.connect('DB_DMV.sqlite')
-
 query = """
     SELECT * FROM INITIAL_PERMIT
     """
 c = connection.cursor()
-r = c.execute(query)
-a = r.fetchall()
-
-df = pd.read_sql(query, con)
-
-df_dmv_zipcodes = pd.DataFrame.from_dict(data={
-    'Bakers_Basin': '08648',
-    'Bayonne': '07002',
-    'Camden': '08030',
-    'Cherry_Hill': '08002',
-    'Cardiff': '08201',
-    'Delanco': '08075',
-    'East_Orange': '07017',
-    'Eatontown': '07702',
-    'Edison': '08817',
-    'Elizabeth': '07114',
-    'Flemington': '08822',
-    'Freehold': '07728',
-    'Hazlet': '07730',
-    'Jersey_City': '07030',
-    'Lakewood': '08701',
-    'Lodi': '07644',
-    'Manahawkin': '08050',
-    'Medford': '08055',
-    'Newark': '07101',
-    'Newton': '07860',
-    'North_Bergen': '07047',
-    'Oakland': '07436',
-    'Paterson': '07501',
-    'Rahway': '07065',
-    'Randolph': '07845',
-    'Rio_Grande': '08242',
-    'Runnemede': '08007',
-    'Salem': '08070',
-    'Somerville': '08876',
-    'South_Brunswick': '08512',
-    'South_Plainfiled': '07080',
-    'Springfield': '07081',
-    'Toms_River': '08732', 
-    'Trenton_Regional': '08601',
-    'Turnersville': '08012',
-    'Vineland': '08332',
-    'Wallington': '07055',
-    'Washington': '07882',
-    'Wayne': '07035',
-    'West_Deptford': '08051'
-
-}, orient='index', columns=['zip'])
-df_dmv_zipcodes.index.rename('dmv', inplace=True)
-
-# # # # # # # # # # # # # # # # # # # # # # # #
-#            GET NEXT AVAILABLE TIME          #
-# # # # # # # # # # # # # # # # # # # # # # # #
-
-df_dmv_zipcodes.to_sql('dmv_zips', con, if_exists='append')
-#c = con.cursor()
-#r = c.execute('select dmv, zip from dmv_zips')
-#r.fetchall()
-'''
-def predict(location, time):
-    """
-
-    """
-    return best_time, best_location
-'''
-
-df.shape
-
-df['shift'] = '' #call everyone am and change the ones repeated to pm
-cols = df.columns.tolist() #change columns order...
-cols = cols[:1] + cols[-1:] + cols[1:-1] # ...to bring shift to second positon
-df = df[cols]
-df.groupby('shift').count()
+raw_service = pd.read_sql(query, connection)
+raw_service.shape #(57003, 41)
+service = 'initial_permit'
 
 # # # # # # # # # # # # # # # # # # # # # # # #
 #            FIXING THE MISSING AM PM         #
 # # # # # # # # # # # # # # # # # # # # # # # #
-
 # 1) if day is the same and time is smaller than previous, shift = pm
 # 2) if day has a pm, the missing ones are am
 #    most of dates should have a resolution by now
 # 3) if day is the very next to the previous one and hour diff is small = am
 # 4) if day is the very previous to the next one and hour diff is small = pm
+raw_service['shift'] = '' #calls everyone am and change the ones repeated to pm
 
-df['time_stamp'] = pd.to_datetime(df['time_stamp'], format='%d/%m/%Y %H:%M')
-df['time_shift'] = df['time_stamp'].shift(1)
+raw_service['time_stamp'] = pd.to_datetime(raw_service['time_stamp'], format='%d/%m/%Y %H:%M')
+raw_service['time_shift'] = raw_service['time_stamp'].shift(1)
 # 1) gives first pm of day (time drops to 0 but day stays the same)
 #   df['shift'] = ''
-#df['shift'] = df.apply(lambda x: 'pm' if x.time_stamp.hour < x.time_shift.hour and x.time_stamp.day == x.time_shift.day else '', axis=1)
-df['shift'] = df.apply(lambda x: 'pm' if \
+raw_service['shift'] = raw_service.apply(lambda x: 'pm' if \
                 (x.time_stamp + pd.offsets.Hour(12)).hour < (x.time_shift + pd.offsets.Hour(12)).hour and \
                 x.time_stamp.day == x.time_shift.day \
                 else 'am', axis=1)
 
 # 1.1) completes pm for all values of the day
-for i in range(1, len(df)):
+for i in range(1, len(raw_service)):
     # if previous is pm and current is the same day than previous, it is also pm
-    if df['shift'][i-1] == 'pm' and df['time_stamp'][i].day == df['time_stamp'][i-1].day:
-        df['shift'].iloc[i] = 'pm'
-df.groupby('shift').count() # to verify
-# if pm, adds 12 hours, converting it to pm
-#df['time_shift'] = df.apply(lambda x: (x['time_stamp'] + pd.Timedelta(hours=12)) if x['shift'] == 'pm' else x[ 'time_stamp'], axis=1) 
-#df['time_shift'] = df.apply(lambda x: x['time_stamp'] if x['shift'] == 'am' and x['time_stamp'].hour == 12 else x[ 'time_stamp'], axis=1) #with AND
-
-#df['time_shift'] = df.apply(lambda x: x['time_stamp'] if (x['shift'] == 'am' and x['time_stamp'].hour < 12) or \
-#                    (x['shift'] == 'pm' and x['time_stamp'].hour == 12) else x[ 'time_stamp'], axis=1) #works for 'do nothing'
+    if raw_service['shift'][i-1] == 'pm' and raw_service['time_stamp'][i].day == raw_service['time_stamp'][i-1].day:
+        raw_service['shift'].iloc[i] = 'pm'
+raw_service.groupby('shift').count() # used to verify if any blank value is present
 
 '''
-4 cases:
-am < 12 -> do nothing (11:00 -> 11:00)
+4 cases (old -> fixed)
+am < 12 -> do nothing (11:15 -> 11:15)
 pm = 12 -> do nothing (noon = 12:15 -> 12:15)
 am = 12 -> subtract 12h (midnight fifteen = 12:15 -> 00:15)
 pm < 12 -> adds 12 hours (11:00 -> 23:00) 
 '''
-df['time_shift'] = df.apply(lambda x: x['time_stamp'] if (x['shift'] == 'am' and x['time_stamp'].hour < 12) or \
+raw_service['time_shift'] = raw_service.apply(lambda x: x['time_stamp'] if (x['shift'] == 'am' and x['time_stamp'].hour < 12) or \
                     (x['shift'] == 'pm' and x['time_stamp'].hour == 12) else \
                         x['time_stamp'] - pd.Timedelta(hours=12) if x['shift'] == 'am' and x['time_stamp'].hour == 12 else \
                             x['time_stamp'] + pd.Timedelta(hours=12), axis=1)
-#df.to_csv('df_with_shift.csv')
-df.drop(['time_stamp', 'shift'], axis=1, inplace = True)
-df[:50]
+raw_service.drop(['time_stamp', 'shift'], axis=1, inplace = True)
+
+cols = raw_service.columns.tolist() #change columns order...
+cols = cols[-1:] + cols[:-1] 
+raw_service = raw_service[cols] # ...to bring new time to the first position
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #  DROPPING THE COLUMNS THAT DON'T HAVE ANY APPOINTMENTS  #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-df2 = df.copy()
-
 # identify and remove columns that don't have any appointment
-total_entries = df2.shape[0]
-list_to_drop = []
-columnsdf2 = df2.columns
-for column in columnsdf2:
-    if df2.loc[:, column].isna().sum() == total_entries: # all entries are NAs
+total_entries = raw_service.shape[0] # number of rows
+list_to_drop = [] # for information
+columns = raw_service.columns
+for column in columns:
+    if raw_service.loc[:, column].isna().sum() == total_entries: # all entries are NAs
         list_to_drop.append(column)
-        df2.drop([column], axis = 1, inplace=True) #can't drop columns this way
-    elif df2[column][-1:] is not None: # there are appointments, and the last is valid
+        raw_service.drop([column], axis = 1, inplace=True) #drop columns
+    elif raw_service[column][-1:] is not None: # there are appointments, and the last is valid
         pass
     else: #to avoid leaking appointment from next agency, create a fake avent at the last position
-        df2[column][-1:] = df2['time_shift'][-1:]
+        raw_service[column][-1:] = raw_service['time_shift'][-1:]
 
-# data was captured in different time periods, so to avoid a big gap between them, a fake event
-# will be created at the end of each time period. Ideally this step is be avoided by using a better
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+#  CREATING FAKE APPOINTMENTS BEFORE TIME GAPS, AVOIDING OUTLIERS #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# the data was captured in different time periods, so to avoid a big gap between them, a fake event
+# is created at the end of each time period. Ideally this step is be avoided by using a better
 # data collection.
 # Assumptions: (1) all locations without any appointment were already removed, (2) if that agency
 # has enough appointments, this extra event will not change much, and (3) if that agency has seldom
 # events, this approach will reduce the variability of results (by bringing mean down).
 
-list_to_drop = []
-columnsdf2 = df2.columns
-for i in range(0, len(df2)-1): # for every entry
-    if (df2['time_shift'][i+1] - df2['time_shift'][i]).days > 5: # if more than 5 days between time and next
-        for column in columnsdf2: # for that time gap, get every location
-            if df2[column][i] is None: # last value is not valid
-                df2[column][i] = df2['time_shift'][i].strftime('%m/%d/%Y %I:%M %p') # 
-                print(str(column) + ' had a placeholder added')
-            else:
-                print(str(column) + ' had a valid apointment')
-        
-        print(str(df2['time_shift'][i-1]) + ' - ' + str(df2['time_shift'][i]) + ': bigger than 5 days difference')
+#list_to_drop = []
+columns = raw_service.columns
+for i in range(0, len(raw_service)-1): # for every entry
+    if (raw_service['time_shift'][i+1] - raw_service['time_shift'][i]).days > 2: # if more than given days between time and next
+        for column in columns: # for that time gap, get every location
+            if raw_service[column][i] is None: # last value is not valid
+                raw_service[column][i] = raw_service['time_shift'][i].strftime('%m/%d/%Y %I:%M %p') # 
+        print(str(raw_service['time_shift'][i-1]) + ' - ' + str(raw_service['time_shift'][i]) + ': bigger than given difference in days')
+# returns 2021-10-26 18:48; 2021-11-13 12:59; 2021-12-03 20:55; 2022-02-18 02:25
+# as the final values before gaps bigger than two days
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#  CONVERTS HOR df INTO VERTICAL df (MELT) FOR EASIER ACCESS  #
+#  CONVERTS HOUR df INTO VERTICAL df (MELT) FOR EASIER ACCESS #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+service_df = pd.melt(raw_service, id_vars=['time_shift'], value_vars=raw_service.columns[1:], var_name = 'location') # melts original df
+service_df['hasAvailability'] = service_df['value'].apply(lambda x: 0 if x is None else 1) # 1 if that time is available for that service
 
-df2 = pd.melt(df2, id_vars=['time_shift'], value_vars=df2.columns[1:]) # melts original df
-#df2.dropna(subset=['value'])
-df2['hasAvailability'] = df2['value'].apply(lambda x: 0 if x is None else 1) # 1 if that time is available for that service
 
-df2['value'] = pd.to_datetime(df2['value'], format='%m/%d/%Y %I:%M %p') #directly from the DMV website
-df2['time_shift'] = pd.to_datetime(df2['time_shift'], format='%Y-%m-%d %H:%M')
+# # # # # # # # # # # # # # # # # # # # # # # #
+#           GETS NEXT AVAILABLE TIME          #
+# # # # # # # # # # # # # # # # # # # # # # # #
+service_df['value'] = pd.to_datetime(service_df['value'], format='%m/%d/%Y %I:%M %p') #directly from the DMV website
+service_df['time_shift'] = pd.to_datetime(service_df['time_shift'], format='%Y-%m-%d %H:%M')
 
-df2['diffOfTime'] = df2['value'] - df2['time_shift'] # horizontal distance between times
-df2['diffTimeDays'] = df2['diffOfTime'].apply(lambda x: x.days) # horizontal distance between times in days
+service_df['diffOfTime'] = service_df['value'] - service_df['time_shift'] # horizontal distance between times
+#service_df['diffTimeDays'] = service_df['diffOfTime'].apply(lambda x: x.days) # horizontal distance between times in days
+# vertical distance = the n of intervals until next available appointment
+service_df['countdown_n'] = service_df.groupby((service_df['hasAvailability'] == 1).cumsum()).cumcount(ascending=False)+1
+service_df.loc[service_df['hasAvailability'] == 1, 'countdown_n'] = 0
 
-df2['countdown_n'] = df2.groupby((df2['hasAvailability'] == 1).cumsum()).cumcount(ascending=False)+1 # n of intervals until next avail. appoint.
-df2.loc[df2['hasAvailability'] == 1, 'countdown_n'] = 0
 
 # # # # # # # # # # # # # # # # # # # # # # # # #
-#            GET NEXT APPOINTMENT TIME          #
+#           GETS NEXT APPOINTMENT TIME          #
 # # # # # # # # # # # # # # # # # # # # # # # # #
-
-df2['temp_next_time'] = 0
-for i in range(len(df2)):
+service_df['temp_next_time'] = 0
+for i in range(len(service_df)):
     try:
-        df2['temp_next_time'][i] = df2.iloc[i + df2['countdown_n'][i], 0]
+        service_df['temp_next_time'][i] = service_df.iloc[i + service_df['countdown_n'][i], 0]
     except IndexError:
-        df2['temp_next_time'][i] = '0'
-df2['temp_next_time'] = pd.to_datetime(df2['temp_next_time'], format='%Y-%m-%d %H:%M') #directly from the DMV website
-df2['diffOfTime_vertical'] = df2['temp_next_time'] - df2['time_shift'] # horizontal distance between times
+        service_df['temp_next_time'][i] = '0'
+service_df['temp_next_time'] = pd.to_datetime(service_df['temp_next_time'], format='%Y-%m-%d %H:%M') #directly from the DMV website
+service_df['diffOfTime_vertical'] = service_df['temp_next_time'] - service_df['time_shift'] # horizontal distance between times
 
 
-#df2.to_csv('df2.csv')
-df2_cleaned = df2.copy()
-df2_cleaned.drop(['value', 'hasAvailability', 'diffOfTime', 'diffTimeDays', 'countdown_n', 'days_cat', 'hours_cat', 'minutes_cat'], axis = 1, inplace=True)
+# cleans df for clarity, dropping temporaty columns
+service_df_cleaned = service_df.copy()
+service_df_cleaned.drop(['value', 'hasAvailability', 'diffOfTime', 'countdown_n', 'temp_next_time'], axis = 1, inplace=True)
+service_df_cleaned.columns
+
+
+# service_df['diffOfTime_vertical'].plot(ylim=[0, .1E15]) #checks how times are distributed
+
 '''
-df2_cleaned['days_cat'] = df2_cleaned.apply(lambda x: x.time_shift.day, axis=1)
-df2_cleaned['hours_cat'] = df2_cleaned.apply(lambda x: x.time_shift.hour, axis=1)
-df2_cleaned['minutes_cat'] = df2_cleaned.apply(lambda x: x.time_shift.minute, axis=1)
-'''
-
-
-
-df2['diffOfTime_vertical'].plot(ylim=[0, .1E15])
 # # # # # # # # # # # # # # # # # # # # # # # # #
 #          FIND FREQUENCY BY USING FFT          #
 # # # # # # # # # # # # # # # # # # # # # # # # #
-columnsdf2 = df2.variable.unique()
+# Try to find a temporal frequency appliying fast Fourier transform.
+valid_locations = service_df.location.unique()
 import scipy.fft
-for location in columnsdf2:
-    data_solo_location = df2.groupby('variable').get_group(location) #splits dataset per city
+for location in valid_locations:
+    data_solo_location = service_df.groupby('location').get_group(location) #splits dataset per city
     diff_vertical_in_s = np.array(data_solo_location.diffOfTime_vertical/ np.timedelta64(1, 's'))
     fft = scipy.fft.fft((diff_vertical_in_s - diff_vertical_in_s.mean()))
     plt.plot(np.abs(fft))
     plt.title('FFT for ' + str(location))
     plt.show()
+# no valid frequency exists, hence this method can't be applied.
+'''
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # #
+#      USING TIME AS CATEGORICAL VARIABLES      #
+# # # # # # # # # # # # # # # # # # # # # # # # #
+service_df_cleaned['days_cat'] = service_df_cleaned.apply(lambda x: x.time_shift.weekday(), axis=1)
+service_df_cleaned['hours_cat'] = service_df_cleaned.apply(lambda x: x.time_shift.hour, axis=1)
+service_df_cleaned['minutes_cat'] = service_df_cleaned.apply(lambda x: x.time_shift.minute, axis=1)
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
-#                      #
+#                  MODEL TRAINING                   #
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
-# # # # # # 
-# IMPORTING ML LIBRARIES
-# # # # # #
-from sklearn.linear_model import Ridge
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.datasets import make_regression
-from sklearn import base
-from sklearn.linear_model import LinearRegression, SGDRegressor
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
-'''
-
-# df2.columns = time_stamp', 'variable', 'value', 'hasAvailability', 'diffOfTime', 'diffTimeDays', 'countdown'
-columnsdf2 = df2.variable.unique()
-for location in columnsdf2[:3]:
-    data_solo_location = df2.groupby('variable').get_group(location) #splits dataset per city
-    # makes X to be a relative time, stating at zero seconds
-    data_solo_location['time_shift'] = data_solo_location['time_shift'] - data_solo_location['time_shift'][0]
-
-
-
-data_solo_location = df2.groupby('variable').get_group('Bayonne') #splits dataset per city
-data_solo_location['time_shift'] = data_solo_location['time_shift'] - data_solo_location['time_shift'][0]
-
-train, test = train_test_split(data_solo_location[['time_shift', 'diffOfTime_vertical']], test_size=0.2)
-#data_solo_location['time_shift'][10].seconds
-#y_train = np.ravel(train[['diffOfTime_vertical']])
-#y_test = np.ravel(test[['diffOfTime_vertical']])
-y_train = np.array(train[['diffOfTime_vertical']]/ np.timedelta64(1, 's'))
-y_test = np.array(test[['diffOfTime_vertical']]/ np.timedelta64(1, 's'))
-#train = pd.DataFrame(train)
-X_train = np.array(train['time_shift'] / np.timedelta64(1, 's')).reshape(-1,1)
-X_test = np.array(test[['time_shift']] / np.timedelta64(1, 's')).reshape(-1,1)
-
-#enc = OneHotEncoder(handle_unknown='ignore')
-#one = 
-
-rf = RandomForestRegressor()
-rf.fit(X_train, y_train)
-#pd.Series(a).arange(-1,1)
-from sklearn.metrics import mean_squared_error
-mean_squared_error
-
-final_predictions = rf.predict(X_test)
-final_mse = mean_squared_error(y_test, final_predictions)
-final_rmse = np.sqrt(final_mse)
-
-pd.to_datetime(([-4.61856449e+15]))
-a = pd.to_datetime((['2022/05/02 21:00:00']))
-test = a[0].value
-
-records_series[10] - records_series[0]
-records_series_relative = records_series.apply(lambda x: x - records_series.iloc[0])
-
-
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-# ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # ! # !
-'''
-import pickle
-from sklearn import base
 class cat_estimator(base.BaseEstimator, base.RegressorMixin):
     def __init__(self, column, estimator_factory):
         # column is the value to group by; estimator_factory can be
@@ -528,21 +307,20 @@ class cat_estimator(base.BaseEstimator, base.RegressorMixin):
         
     def fit(self, X, y):
         # Create an estimator and fit it with the portion in each group
-        # uses group_by + get_group to split df in cities. Train a each model and store them in a dictionary
-        
+        # uses group_by split df by locations. Train a model per lcoation
+        # and store them in a dictionary
         self.ests = {}
-        groups = X.groupby(self.column).groups
+        groups = X.groupby(self.column).groups #splits by location
         for group, rows in groups.items():
-            self.ests[group] = self.estimator_factory()
-            self.ests[group].fit(X.loc[rows], y.loc[rows])
-            model_name = str(group + '_model')
-            pickle.dump(self.ests[group], open(model_name, 'wb'))
+            self.ests[group] = self.estimator_factory() #calls factory per model
+            self.ests[group].fit(X.loc[rows], y.loc[rows]) #fits per location
+            model_name = str(service + '_' + group + '_model') #defines name for saving
+            pickle.dump(self.ests[group], open(model_name, 'wb')) #saves model
         return self
 
     def predict(self, X):
-        #y = np.array(y/ np.timedelta64(1, 's')) 
-        groups = X.groupby(self.column).groups
-        output = pd.Series(dtype=np.float32)
+        groups = X.groupby(self.column).groups #splits by location
+        output = pd.Series(dtype=np.float32) #placeholder for predictions
         for group, rows in groups.items():
             pred = pd.Series(self.ests[group].predict(X.loc[rows]), index = rows)
             output = output.append(pred)
@@ -550,98 +328,100 @@ class cat_estimator(base.BaseEstimator, base.RegressorMixin):
 
 
 def season_factory():
+    # one hot encodes categorical columns
     features = ColumnTransformer([
             ('days', OneHotEncoder(), ['days_cat']),
             ('hours', OneHotEncoder(), ['hours_cat']),
             ('minutes', OneHotEncoder(), ['minutes_cat'])
             ])
+    # and returns a pipe from categorical columns to model
     return Pipeline([('time_to_cat', features),
-                 ('rf', RandomForestRegressor(max_depth=15, min_samples_leaf=15, n_estimators=350))])
+                 #('rf', RandomForestRegressor(max_depth=30, min_samples_leaf=20, n_estimators=550))])
+                 ('ridge', Ridge(alpha=100))])
 
-#model = cat_estimator('variable', pipe_cat).fit(df2_cleaned, df2_cleaned['diffOfTime_vertical'])
-df2_t = df2[:50000]
-model = cat_estimator('variable', season_factory).fit(df2_t, df2_t['diffOfTime_vertical'])
-results = model.predict(df2_t[:5])
-results / 3.6e+12 #divide the time value by 3.6e+12 from ns to hours
+#'''
+## # # # # # # # # # # # # # # # # # # # # #
+#    HYPERPARAMETERS TUNING EVALUATION    #
+# # # # # # # # # # # # # # # # # # # # # #
+# Pivots dataframe, selects first 80% of data and melts it again. This 80% will be used
+# to evaluate the model, as to predict the future of that slice of data.
+#57003 values per location
+#45600 =~ 80% of each location
+pivot_for_training_testing = service_df_cleaned.pivot(index='time_shift', columns='location')['diffOfTime_vertical']
+#pivot_for_testing = service_df_cleaned.pivot(index='time_shift', columns='location')['diffOfTime_vertical']
+pivot_for_training = pivot_for_training_testing[:45600].reset_index() #approximately 80% of dataset
+pivot_for_testing = pivot_for_training_testing[45600:].reset_index()
 
-plt.plot(df2_t.time_shift, df2_t.diffOfTime_vertical)
-plt.plot(df2_t.time_shift, model.predict(df2_t))
-plt.plot(df2_t.time_shift, df2_t.diffOfTime_vertical, df2_t.time_shift, model.predict(df2_t)) # rf no hyperparameters
+# each location now contains only the first 80% or last 20% of the data
+training = pd.melt(pivot_for_training, id_vars=['time_shift'], value_vars=raw_service.columns[1:],
+    value_name='diffOfTime_vertical', var_name = 'location')
+testing = pd.melt(pivot_for_testing, id_vars=['time_shift'], value_vars=raw_service.columns[1:],
+    value_name='diffOfTime_vertical', var_name = 'location')
 
-
-'''
-df2_t = df2[:500000]
-df2_t
-groups1 = df2_t.groupby(df2_t.variable).groups
-for group, rows in groups1.items():
-#    print(rows)
-    print (group)
-    self.ests[group] = self.estimator_factory()
-    self.ests[group].fit(X.loc[rows], y.loc[rows])
-return self
-
-'''
-
-
-m = time_to_categorical()
-m.fit(df2_cleaned[['days_cat', 'hours_cat', 'minutes_cat']])
-m.transform(df2_cleaned[['days_cat', 'hours_cat', 'minutes_cat']])
-
+# re-calculates the categorical columns for the model for both 80% and 20% datasets
+training['days_cat'] = training.apply(lambda x: x.time_shift.weekday(), axis=1)
+training['hours_cat'] = training.apply(lambda x: x.time_shift.hour, axis=1)
+training['minutes_cat'] = training.apply(lambda x: x.time_shift.minute, axis=1)
+testing['days_cat'] = testing.apply(lambda x: x.time_shift.weekday(), axis=1)
+testing['hours_cat'] = testing.apply(lambda x: x.time_shift.hour, axis=1)
+testing['minutes_cat'] = testing.apply(lambda x: x.time_shift.minute, axis=1)
 
 
-df2_t = df2[:5]
-df2_t['daysdf2'] = df2_t.apply(lambda x: x.time_shift.day, axis=1)
-df2_t['hoursdf2'] = df2_t.apply(lambda x: x.time_shift.hour, axis=1)
-df2_t['minutesdf2'] = df2_t.apply(lambda x: x.time_shift.minute, axis=1)
+training_t = training[:45600] # only bakers_basin
+testing_t = testing[:11403] # only bakers_basin
+testing = service_df_cleaned[:57003]
 
-enc = OneHotEncoder(handle_unknown='ignore')
-features = ColumnTransformer([
-            ('days', OneHotEncoder(), ['daysdf2']),
-            ('hours', OneHotEncoder(), ['hoursdf2']),
-            ('minutes', OneHotEncoder(), ['minutesdf2'])
+#X_bb = service_df_cleaned[:57003] # only bakers_basin
+
+# features manually calculated for using GridSearchCV
+manual_features = ColumnTransformer([
+            ('days', OneHotEncoder(), ['days_cat']),
+            ('hours', OneHotEncoder(), ['hours_cat']),
+            ('minutes', OneHotEncoder(), ['minutes_cat'])
             ])
-features.fit_transform(df2_t)
 
-
-df2_t_ppt = df2_t.copy()
-df2_t_ppt.drop(['hasAvailability', 'diffOfTime', 'diffTimeDays', 'temp_next_time', 'diffOfTime_vertical_relative'], axis=1, inplace=True)
-t_col = df2_t_ppt.columns
-t_col
-df2_t_ppt.columns = (['time stamp', 'location', 'next app.', 'countdown', 'time to next app', 'days_cat', 'hours_cat', 'minutes_cat'])
-
-
-
-'''
-data_solo_location = df2.groupby('variable').get_group('Bayonne') #splits dataset per city
-data_solo_location['time_shift'] = data_solo_location['time_shift'] - data_solo_location['time_shift'][0]
-
-train, test = train_test_split(data_solo_location[['time_shift', 'diffOfTime_vertical']], test_size=0.2)
-#data_solo_location['time_shift'][10].seconds
-#y_train = np.ravel(train[['diffOfTime_vertical']])
-#y_test = np.ravel(test[['diffOfTime_vertical']])
-y_train = np.array(train[['diffOfTime_vertical']]/ np.timedelta64(1, 's'))
-y_test = np.array(test[['diffOfTime_vertical']]/ np.timedelta64(1, 's'))
-#train = pd.DataFrame(train)
-X_train = np.array(train['time_shift'] / np.timedelta64(1, 's')).reshape(-1,1)
-X_test = np.array(test[['time_shift']] / np.timedelta64(1, 's')).reshape(-1,1)
-
-#enc = OneHotEncoder(handle_unknown='ignore')
-#one = 
-
+#max_depth=15, min_samples_leaf=15, n_estimators=350
+parameters = {'max_depth':[10, 15, 20], 'min_samples_leaf':[5,15,20], 'n_estimators':[250,350,450]} #best: 20,20,450
+parameters = {'max_depth':[20,30], 'min_samples_leaf':[20,30], 'n_estimators':[450,550]} #best: 30,20,550
 rf = RandomForestRegressor()
-rf.fit(X_train, y_train)
-#pd.Series(a).arange(-1,1)
-from sklearn.metrics import mean_squared_error
-mean_squared_error
+search = GridSearchCV(rf, parameters, verbose = 4)
+search.fit(manual_features.fit_transform(training_t), training_t['diffOfTime_vertical']/np.timedelta64(1, 's'))
+print(search.best_estimator_)
 
-final_predictions = rf.predict(X_test)
-final_mse = mean_squared_error(y_test, final_predictions)
-final_rmse = np.sqrt(final_mse)
+parameters = {'alpha':[0.001,0.01,0.1,1,10,100,1000,10000]} #best:100
+parameters = {'alpha':[75,100,125]} #best:100
+rg = Ridge()
+search = GridSearchCV(rg, parameters, verbose = 4)
+search.fit(manual_features.fit_transform(training_t), training_t['diffOfTime_vertical']/np.timedelta64(1, 's'))
+print(search.best_estimator_)
 
-pd.to_datetime(([-4.61856449e+15]))
-a = pd.to_datetime((['2022/05/02 21:00:00']))
-test = a[0].value
 
-records_series[10] - records_series[0]
-records_series_relative = records_series.apply(lambda x: x - records_series.iloc[0])
-'''
+# # # # # # # # # # # # # # # # # # #
+#             MODEL USAGE           #
+# # # # # # # # # # # # # # # # # # #
+#training_t is 80% of the first location; #testing is all first location
+
+# trains a temporary model for one city using 80% of its values and
+# plots its real data against predicted values from trained model
+model_evaluation = cat_estimator('location', season_factory).fit(training_t, training_t['diffOfTime_vertical'])
+plt.plot(testing.time_shift, testing.diffOfTime_vertical, testing.time_shift, model_evaluation.predict(testing))
+
+model = cat_estimator('location', season_factory).fit(service_df_cleaned, service_df_cleaned['diffOfTime_vertical'])
+plt.plot(service_df_cleaned.time_shift, service_df_cleaned.diffOfTime_vertical, service_df_cleaned.time_shift, model.predict(service_df_cleaned))
+
+# # # # # # # # # # # # # # # # # # #
+#          MODEL EVALUATION         #
+# # # # # # # # # # # # # # # # # # #
+# a model for a city at a time, that has X as training and y the same training in hours.
+# The mean squared error MSE is calculated comparing the real with its predicted values.
+# A smaller error is preferred.
+model_evaluation = cat_estimator('location', season_factory).fit(training_t, training_t['diffOfTime_vertical']/np.timedelta64(1, 'h'))
+MSE = mean_squared_error(testing_t['diffOfTime_vertical']/np.timedelta64(1, 'h'), model_evaluation.predict(testing_t))
+RMSE = math.sqrt(MSE)
+print('MSE = ' + str(MSE)) 
+print('RMSE = ' + str(RMSE))
+
+#max_depth=15, min_samples_leaf=15, n_estimators=350 -> 4.42
+#max_depth=30, min_samples_leaf=20, n_estimators=550 -> 4.41 (best by GridSearchCV)
+#ridge(alpha=1) -> 4.09
+#ridge(alpha=100) -> 4.09 (best by GridSearchCV)
