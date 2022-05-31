@@ -3,12 +3,6 @@ import pandas as pd
 from cgi import print_environ_usage
 import os
 from os.path import exists # check if SQL exists
-#import re
-#import smtplib, ssl
-#from subprocess import CalledProcessError
-#import time
-#from datetime import datetime
-#import random #for random refresh times
 from pprint import pprint
 import sqlite3
 import sqlite3 as db
@@ -40,7 +34,7 @@ import math
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #       MAKING AND TESTING THE SQL CONNECTION       #
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
-connection = sqlite3.connect('DB_DMV.sqlite')
+connection = sqlite3.connect('DB_DMV0.sqlite')
 # testing a simple query:
 query = """
     SELECT * FROM REAL_ID LIMIT 10;
@@ -111,7 +105,7 @@ SELECT SUM(CASE when Bayonne is NULL then 1 else 0 end) count_nulls
 c.execute(query)
 c.fetchall() #if count_nulls is 0, NULLS are stores as text.
 
-'''
+
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
 #            REPLACES 'NULL' WITH NULL             #
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
@@ -129,14 +123,13 @@ for service in list_of_services:
             city + """ = null WHERE """ + city + """ = 'NULL'
         """
         c.execute(query)
-    print(service)
 connection.commit()
-'''
+
 
 # # # # # # # # # # # # # # # # # # 
 #         CONVERTING TO DF        #
 # # # # # # # # # # # # # # # # # # 
-service = list_of_services[5] # !! CHANGE HERE FOR DIFFERENT SERVICES !!
+service = list_of_services[1] # !! CHANGE HERE FOR DIFFERENT SERVICES !!
 query = """
     SELECT * FROM """ + service
 c = connection.cursor()
@@ -191,17 +184,17 @@ raw_service = raw_service[cols] # ...to bring new time to the first position
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # identify and remove columns that don't have any appointment
 total_entries = raw_service.shape[0] # number of rows
+last_value_index = len(raw_service)-1 #number of rows
 list_to_drop = [] # for information
 columns = raw_service.columns
 for column in columns:
     if raw_service.loc[:, column].isna().sum() == total_entries: # all entries are NAs
         list_to_drop.append(column)
         raw_service.drop([column], axis = 1, inplace=True) #drop columns
-    elif raw_service[column][-1:] is not None: # there are appointments, and the last is valid
+    elif raw_service[column].iloc[last_value_index] is not None: # there are appointments, and the last is valid
         pass
     else: #to avoid leaking appointment from next agency, create a fake avent at the last position
-        raw_service[column][-1:] = raw_service['time_shift'][-1:]
-
+        raw_service[column].iloc[last_value_index] = raw_service['time_shift'].iloc[last_value_index].strftime('%m/%d/%Y %I:%M %p')
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
@@ -396,6 +389,7 @@ print(search.best_estimator_)
 model = cat_estimator('location', season_factory).fit(service_df_cleaned, service_df_cleaned['diffOfTime_vertical'])
 plt.plot(service_df_cleaned.time_shift, service_df_cleaned.diffOfTime_vertical, service_df_cleaned.time_shift, model.predict(service_df_cleaned))
 
+'''
 # # # # # # # # # # # # # # # # # # #
 #          MODEL EVALUATION         #
 # # # # # # # # # # # # # # # # # # #
@@ -413,3 +407,4 @@ print('RMSE = ' + str(RMSE))
 #max_depth=30, min_samples_leaf=20, n_estimators=550 -> 4.41 (best by GridSearchCV)
 #ridge(alpha=1) -> 4.09
 #ridge(alpha=100) -> 4.09 (best by GridSearchCV)
+'''
