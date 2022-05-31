@@ -111,7 +111,7 @@ SELECT SUM(CASE when Bayonne is NULL then 1 else 0 end) count_nulls
 c.execute(query)
 c.fetchall() #if count_nulls is 0, NULLS are stores as text.
 
-
+'''
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
 #            REPLACES 'NULL' WITH NULL             #
 # # # # # # # # # # # # # # # # # # # # # # # # # ##
@@ -129,22 +129,19 @@ for service in list_of_services:
             city + """ = null WHERE """ + city + """ = 'NULL'
         """
         c.execute(query)
+    print(service)
 connection.commit()
-
-
-
-
+'''
 
 # # # # # # # # # # # # # # # # # # 
 #         CONVERTING TO DF        #
 # # # # # # # # # # # # # # # # # # 
+service = list_of_services[5] # !! CHANGE HERE FOR DIFFERENT SERVICES !!
 query = """
-    SELECT * FROM INITIAL_PERMIT
-    """
+    SELECT * FROM """ + service
 c = connection.cursor()
 raw_service = pd.read_sql(query, connection)
 raw_service.shape #(57003, 41)
-service = 'INITIAL_PERMIT'
 
 # # # # # # # # # # # # # # # # # # # # # # # #
 #            FIXING THE MISSING AM PM         #
@@ -227,7 +224,7 @@ for i in range(0, len(raw_service)-1): # for every entry
         print(str(raw_service['time_shift'][i-1]) + ' - ' + str(raw_service['time_shift'][i]) + ': bigger than given difference in days')
 # returns 2021-10-26 18:48; 2021-11-13 12:59; 2021-12-03 20:55; 2022-02-18 02:25
 # as the final values before gaps bigger than two days
-
+#raw_service.to_pickle(service + '_df_raw') #saves finished df for analysis
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #  CONVERTS HOUR df INTO VERTICAL df (MELT) FOR EASIER ACCESS #
@@ -294,8 +291,11 @@ for location in valid_locations:
 service_df_cleaned['days_cat'] = service_df_cleaned.apply(lambda x: x.time_shift.weekday(), axis=1)
 service_df_cleaned['hours_cat'] = service_df_cleaned.apply(lambda x: x.time_shift.hour, axis=1)
 service_df_cleaned['minutes_cat'] = service_df_cleaned.apply(lambda x: x.time_shift.minute, axis=1)
+#service_df_cleaned.to_pickle(service + '_df_cleaned') #saves finished df for analysis
 
-
+#plt.plot(service_df_cleaned.time_shift, service_df_cleaned.diffOfTime_vertical)
+#service_df_cleaned.diffOfTime_vertical.idxmin()
+#service_df_cleaned[113975:113985]
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #                  MODEL TRAINING                   #
 # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -339,8 +339,7 @@ def season_factory():
     return Pipeline([('time_to_cat', features),
                  #('rf', RandomForestRegressor(max_depth=30, min_samples_leaf=20, n_estimators=550))])
                  ('ridge', Ridge(alpha=100))])
-
-#'''
+'''
 ## # # # # # # # # # # # # # # # # # # # # #
 #    HYPERPARAMETERS TUNING EVALUATION    #
 # # # # # # # # # # # # # # # # # # # # # #
@@ -349,16 +348,13 @@ def season_factory():
 #57003 values per location
 #45600 =~ 80% of each location
 pivot_for_training_testing = service_df_cleaned.pivot(index='time_shift', columns='location')['diffOfTime_vertical']
-#pivot_for_testing = service_df_cleaned.pivot(index='time_shift', columns='location')['diffOfTime_vertical']
 pivot_for_training = pivot_for_training_testing[:45600].reset_index() #approximately 80% of dataset
 pivot_for_testing = pivot_for_training_testing[45600:].reset_index()
-
 # each location now contains only the first 80% or last 20% of the data
 training = pd.melt(pivot_for_training, id_vars=['time_shift'], value_vars=raw_service.columns[1:],
     value_name='diffOfTime_vertical', var_name = 'location')
 testing = pd.melt(pivot_for_testing, id_vars=['time_shift'], value_vars=raw_service.columns[1:],
     value_name='diffOfTime_vertical', var_name = 'location')
-
 # re-calculates the categorical columns for the model for both 80% and 20% datasets
 training['days_cat'] = training.apply(lambda x: x.time_shift.weekday(), axis=1)
 training['hours_cat'] = training.apply(lambda x: x.time_shift.hour, axis=1)
@@ -367,12 +363,10 @@ testing['days_cat'] = testing.apply(lambda x: x.time_shift.weekday(), axis=1)
 testing['hours_cat'] = testing.apply(lambda x: x.time_shift.hour, axis=1)
 testing['minutes_cat'] = testing.apply(lambda x: x.time_shift.minute, axis=1)
 
+training_t = training[:45600] # only bakers_basin first 80% for testing
+testing_t = testing[:11403] # only bakers_basin last 20% for testing for testing
+testing = service_df_cleaned[:57003] # only bakers_basin complete
 
-training_t = training[:45600] # only bakers_basin
-testing_t = testing[:11403] # only bakers_basin
-testing = service_df_cleaned[:57003]
-
-#X_bb = service_df_cleaned[:57003] # only bakers_basin
 
 # features manually calculated for using GridSearchCV
 manual_features = ColumnTransformer([
@@ -381,7 +375,6 @@ manual_features = ColumnTransformer([
             ('minutes', OneHotEncoder(), ['minutes_cat'])
             ])
 
-#max_depth=15, min_samples_leaf=15, n_estimators=350
 parameters = {'max_depth':[10, 15, 20], 'min_samples_leaf':[5,15,20], 'n_estimators':[250,350,450]} #best: 20,20,450
 parameters = {'max_depth':[20,30], 'min_samples_leaf':[20,30], 'n_estimators':[450,550]} #best: 30,20,550
 rf = RandomForestRegressor()
@@ -395,18 +388,11 @@ rg = Ridge()
 search = GridSearchCV(rg, parameters, verbose = 4)
 search.fit(manual_features.fit_transform(training_t), training_t['diffOfTime_vertical']/np.timedelta64(1, 's'))
 print(search.best_estimator_)
-
+'''
 
 # # # # # # # # # # # # # # # # # # #
 #             MODEL USAGE           #
 # # # # # # # # # # # # # # # # # # #
-#training_t is 80% of the first location; #testing is all first location
-
-# trains a temporary model for one city using 80% of its values and
-# plots its real data against predicted values from trained model
-model_evaluation = cat_estimator('location', season_factory).fit(training_t, training_t['diffOfTime_vertical'])
-plt.plot(testing.time_shift, testing.diffOfTime_vertical, testing.time_shift, model_evaluation.predict(testing))
-
 model = cat_estimator('location', season_factory).fit(service_df_cleaned, service_df_cleaned['diffOfTime_vertical'])
 plt.plot(service_df_cleaned.time_shift, service_df_cleaned.diffOfTime_vertical, service_df_cleaned.time_shift, model.predict(service_df_cleaned))
 
@@ -416,6 +402,7 @@ plt.plot(service_df_cleaned.time_shift, service_df_cleaned.diffOfTime_vertical, 
 # a model for a city at a time, that has X as training and y the same training in hours.
 # The mean squared error MSE is calculated comparing the real with its predicted values.
 # A smaller error is preferred.
+
 model_evaluation = cat_estimator('location', season_factory).fit(training_t, training_t['diffOfTime_vertical']/np.timedelta64(1, 'h'))
 MSE = mean_squared_error(testing_t['diffOfTime_vertical']/np.timedelta64(1, 'h'), model_evaluation.predict(testing_t))
 RMSE = math.sqrt(MSE)
